@@ -27,21 +27,22 @@ public class TerminalVendorDescriptorTests
         descriptor.SupportsNativeHotAttach.Should().BeTrue();
     }
 
-    [Fact(DisplayName = "opencode descriptor: пустой spawn argv (loop в shared serve), эффорта нет, ModelSource=local")]
+    [Fact(DisplayName = "opencode descriptor: пустой spawn argv (loop в shared serve), эффорта нет, ModelSource=agent, selectable")]
     public void Opencode_descriptor_emits_no_base_args_and_has_no_effort()
     {
         var descriptor = TerminalVendorDescriptors.Opencode;
 
         descriptor.SupportsEffort.Should().BeFalse();
         descriptor.DefaultEffort.Should().BeNull();
-        descriptor.ModelSource.Should().Be(TerminalAgentCatalog.ModelSourceLocal);
+        descriptor.ModelSource.Should().Be(TerminalAgentCatalog.ModelSourceAgent);
         descriptor.Models.Should().BeEmpty();
         descriptor.DefaultModel.Should().BeNull();
+        descriptor.InDevelopment.Should().BeFalse();
         descriptor.EnableMouse.Should().BeTrue();
         descriptor.SupportsNativeHotAttach.Should().BeFalse();
 
         var options = new TerminalLaunchOptions(
-            TerminalAgentCatalog.VendorOpencode, Model: "llama-4", Effort: null);
+            TerminalAgentCatalog.VendorOpencode, Model: "opencode/llama-4", Effort: null);
 
         // The pane runs `opencode attach …` (argv supplied by the session-hook adapter), not a
         // model-flagged TUI: the model is pinned server-side on the prompt, so no base flags here.

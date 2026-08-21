@@ -3,7 +3,9 @@
 ## Status
 
 Accepted (amends [ADR-0026](0026-embedded-terminal-capabilities-and-run-preflight.md) for the
-OpenCode vendor)
+OpenCode vendor); the model/provider wiring (`throne-local` synthetic provider) is amended by
+[ADR-0054](0054-opencode-vendor-on-operator-managed-providers.md) — the shared-serve + attach
+architecture stands
 
 ## Context
 

@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Vendor metadata catalog for the embedded-terminal launch surface.
-         * @description Backend is the single source of truth for terminal vendor metadata and curated model lists. The frontend builds its launch dropdowns (vendor / model / effort) and the settings default-vendor selector from this response instead of mirroring `TerminalAgentCatalog` by hand. The `terminal` capability itself does not gate the response — the dropdowns are populated even before that capability is on. Every registered vendor is returned with its `login_status` (probed CLI login) and a `selectable` flag; the settings vendor cards render all of them, while the launch dropdowns keep only `selectable=true`. Currently `opencode` reports `login_status=in_development` and `selectable=false` (local-model rework pending). Curated model lists for `claude`/`codex` are backend-static (`model_source=static`); `opencode` reports `model_source=local` and its `models` list is materialised on the fly from the operator's local OpenAI-compatible endpoint (`Throne:LocalModel:BaseUrl`, probed via `GET {BaseUrl}/v1/models`).
+         * @description Backend is the single source of truth for terminal vendor metadata and curated model lists. The frontend builds its launch dropdowns (vendor / model / effort) and the settings default-vendor selector from this response instead of mirroring `TerminalAgentCatalog` by hand. The `terminal` capability itself does not gate the response — the dropdowns are populated even before that capability is on. Every registered vendor is returned with its `login_status` (probed CLI login) and a `selectable` flag; the settings vendor cards render all of them, while the launch dropdowns keep only `selectable=true`. Curated model lists for `claude`/`codex` are backend-static (`model_source=static`); `opencode` reports `model_source=agent` — its `models` list is discovered live from the operator's own opencode (the providers they connected, flattened to `provider/model` ids from the shared `opencode serve`) and may be empty when the CLI is missing, unauthenticated, or its serve cannot start.
          */
         get: operations["listTerminalVendors"];
         put?: never;
@@ -188,34 +188,34 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * @description Provenance of a vendor's curated model list. `static` — the list is hardcoded in the backend descriptor and changes only by editing the catalog (`claude`, `codex`). `local` — the list comes from the operator's local OpenAI-compatible endpoint (`Throne:LocalModel:BaseUrl`, probed via `GET {BaseUrl}/v1/models`); used by `opencode`. `models` may be empty when the endpoint is unconfigured/unreachable.
+         * @description Provenance of a vendor's curated model list. `static` — the list is hardcoded in the backend descriptor and changes only by editing the catalog (`claude`, `codex`). `local` — the list would come from the operator's local OpenAI-compatible endpoint (`Throne:LocalModel:BaseUrl`, probed via `GET {BaseUrl}/v1/models`); no current vendor uses it — the channel stays a settings-only probe. `agent` — the list is discovered live from the agent CLI itself and mirrors the models the operator enabled/authenticated in the agent's own settings (used by `opencode`: providers connected in the CLI, flattened to `provider/model` ids via the shared `opencode serve`). `models` may be empty for dynamic sources when the underlying channel is unavailable.
          * @enum {string}
          */
-        TerminalModelSource: "static" | "local";
+        TerminalModelSource: "static" | "local" | "agent";
         TerminalVendorMetadataDto: {
             vendor: components["schemas"]["TerminalAgentVendor"];
             /** @description Human-facing vendor label for the launch/settings dropdown. */
             label: string;
             /** @description Whether the vendor exposes a reasoning-effort axis. False → the launch surface hides the effort control and no effort reaches the spawn argv. */
             supports_effort: boolean;
-            /** @description Model whitelist, native-default-first. Always at least one entry for `model_source=static`; may be empty for `model_source=local` when the local endpoint is unconfigured or unreachable — the launch surface then disables the model picker for that vendor. */
+            /** @description Model whitelist, native-default-first. Always at least one entry for `model_source=static`; may be empty for dynamic sources (`local`, `agent`) when the underlying channel is unavailable — the launch surface then disables the model picker for that vendor. */
             models: string[];
-            /** @description Native default model = first entry of `models`. Null when `models` is empty (only possible for `model_source=local`). */
+            /** @description Native default model = first entry of `models`. Null when `models` is empty (only possible for dynamic model sources). */
             default_model?: string | null;
             /** @description Reasoning-effort tiers selectable for this vendor. Wire values come from the `TerminalReasoningEffort` dictionary (`low`/`medium`/`high`/`xhigh`). Typed as `string[]` rather than `TerminalReasoningEffort[]` so the API mapper writes wire strings directly: NSwag cannot attach an `ItemConverterType` for System.Text.Json, so an enum array would leak integer codes onto the wire. Empty when `supports_effort=false`. */
             efforts: string[];
             /** @description Native default effort. Present iff `supports_effort=true`; null for an effort-less vendor. */
             default_effort?: components["schemas"]["TerminalReasoningEffort"] | null;
             model_source: components["schemas"]["TerminalModelSource"];
-            /** @description Result of the per-vendor login probe (CLI present + authenticated). Feeds the vendor card in `/settings` and the «Throne готов» readiness check (≥1 vendor with `ready`). `in_development` is a static placeholder (currently `opencode`) — the vendor is shown but not launchable; see `selectable`. */
+            /** @description Result of the per-vendor login probe (CLI present + authenticated). Feeds the vendor card in `/settings` and the «Throne готов» readiness check (≥1 vendor with `ready`). `in_development` is a static placeholder for vendors intentionally not wired for launch (no current vendor) — the vendor is shown but not launchable; see `selectable`. */
             login_status: components["schemas"]["TerminalVendorLoginStatus"];
-            /** @description Short diagnostic from the login probe (`claude 2.x`, `codex: not logged in`, `в разработке`). Surfaced as the vendor-card subtitle; null when the probe has nothing to add. */
+            /** @description Short diagnostic from the login probe (`claude 2.x`, `codex: not logged in`, `opencode auth login`). Surfaced as the vendor-card subtitle; null when the probe has nothing to add. */
             login_detail?: string | null;
             /** @description Whether the launch surface may offer this vendor. False for `in_development` vendors (and any whose capability prerequisite is unavailable) — they still appear in `/settings` with their status, but the launch dropdown filters them out. */
             selectable: boolean;
         };
         /**
-         * @description Login readiness of a terminal vendor's CLI. `ready` — CLI on PATH and authenticated (`claude auth status` / `codex login status` exit 0). `logged_out` — CLI present but not authenticated. `missing` — CLI not found on PATH. `in_development` — vendor is intentionally not wired for launch yet (e.g. `opencode` pending local-model rework); it is excluded from the readiness check and not `selectable`.
+         * @description Login readiness of a terminal vendor's CLI. `ready` — CLI on PATH and authenticated (`claude auth status` / `codex login status` / `opencode auth list` exit 0). `logged_out` — CLI present but not authenticated. `missing` — CLI not found on PATH. `in_development` — vendor is intentionally not wired for launch yet; it is excluded from the readiness check and not `selectable` (reserved; no current vendor).
          * @enum {string}
          */
         TerminalVendorLoginStatus: "ready" | "logged_out" | "missing" | "in_development";
@@ -254,7 +254,7 @@ export interface components {
          * @enum {string}
          */
         TerminalSessionState: "spawning" | "running" | "blocked" | "exited";
-        /** @description Stable terminal vendor key. The value set is intentionally open and delivered by `GET /api/v1/terminal/vendors`; unknown values are rejected by server-side catalog validation. Provider-neutral axis: the spawn command is built per vendor (`claude --model … --effort …` vs `codex -m … -c model_reasoning_effort=…` vs `opencode --model throne-local/…`, no effort axis). Omitted on the request → the server falls back to `default_terminal_vendor` from settings. */
+        /** @description Stable terminal vendor key. The value set is intentionally open and delivered by `GET /api/v1/terminal/vendors`; unknown values are rejected by server-side catalog validation. Provider-neutral axis: the spawn command is built per vendor (`claude --model … --effort …` vs `codex -m … -c model_reasoning_effort=…` vs `opencode attach …` with the model pinned server-side, no effort axis). Omitted on the request → the server falls back to `default_terminal_vendor` from settings. */
         TerminalAgentVendor: string;
         /**
          * @description Single reasoning-effort axis shared across vendors (the vendor effort dictionaries overlap on low/medium/high/xhigh). The claude-only `max` tier is intentionally excluded.
@@ -265,7 +265,7 @@ export interface components {
             mode: components["schemas"]["TerminalRunMode"];
             /** @description Omitted → server falls back to `default_terminal_vendor` from settings. */
             vendor?: components["schemas"]["TerminalAgentVendor"] | null;
-            /** @description Model id from the vendor's whitelist (claude: opus | sonnet | haiku; codex: gpt-5.6-sol | gpt-5.6-terra | gpt-5.6-luna | gpt-5.5; opencode: any id advertised by the local `/v1/models` endpoint). Omitted → the vendor's native default. An id outside the whitelist for the chosen vendor → 400. */
+            /** @description Model id from the vendor's whitelist (claude: opus | sonnet | haiku; codex: gpt-5.6-sol | gpt-5.6-terra | gpt-5.6-luna | gpt-5.5; opencode: any `provider/model` id the operator's own opencode offers). Omitted → the vendor's native default. An id outside the whitelist for the chosen vendor → 400. */
             model?: string | null;
             /** @description Omitted → the chosen vendor's native default effort. */
             effort?: components["schemas"]["TerminalReasoningEffort"] | null;

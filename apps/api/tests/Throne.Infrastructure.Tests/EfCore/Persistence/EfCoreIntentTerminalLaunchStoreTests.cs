@@ -51,10 +51,10 @@ public class EfCoreIntentTerminalLaunchStoreTests(SqliteFixture fixture)
     {
         var (db, store) = await NewScopeAsync();
 
-        await store.SaveAsync("i-3", Launch("work", "opencode", "throne-local/x", null), CancellationToken.None);
+        await store.SaveAsync("i-3", Launch("work", "opencode", "opencode/gpt-5.1-codex", null), CancellationToken.None);
 
         var loaded = await store.GetAsync("i-3", CancellationToken.None);
-        AssertAxis(loaded!, "work", "opencode", "throne-local/x", null);
+        AssertAxis(loaded!, "work", "opencode", "opencode/gpt-5.1-codex", null);
         var raw = await FindRowAsync(db, "i-3");
         raw!.Effort.Should().BeNull();
     }

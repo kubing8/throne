@@ -393,7 +393,7 @@ namespace Throne.Settings.Contracts.Generated
         public string Base_url { get; set; }
 
         /// <summary>
-        /// Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers and a future OpenCode `provider.models` map. Empty unless `status=ready`.
+        /// Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers. Empty unless `status=ready`. (No terminal vendor consumes this channel anymore — the OpenCode vendor reads the operator's own opencode model surface, ADR-0054.)
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("models")]

@@ -63,7 +63,7 @@ namespace Throne.Api.Generated
         /// Set the default agent vendor for new terminal sessions.
         /// </summary>
         /// <remarks>
-        /// Persists `default_terminal_vendor` (claude | codex). Idempotent upsert of the settings singleton; takes effect on the next launch (live sessions are not touched).
+        /// Persists `default_terminal_vendor` (claude | codex | opencode). Idempotent upsert of the settings singleton; takes effect on the next launch (live sessions are not touched).
         /// </remarks>
         /// <returns>OK</returns>
         [Microsoft.AspNetCore.Mvc.HttpPut, Microsoft.AspNetCore.Mvc.Route("api/v1/settings/terminal", Name = "setTerminalSettings")]

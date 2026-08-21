@@ -48,6 +48,9 @@ public static class TerminalsModule
         services.AddHttpClient(OpencodeTuiClient.HttpClientName);
         services.AddSingleton<IOpencodeTuiClient, OpencodeTuiClient>();
         services.AddSingleton<IOpencodeServeGateway, OpencodeServeGateway>();
+        // Live model list for the OpenCode vendor: providers the operator connected in their own
+        // opencode, flattened from the shared serve's GET /provider (ADR-0054).
+        services.AddSingleton<Throne.Application.Terminals.IVendorModelCatalog, OpencodeModelCatalog>();
         services.AddSingleton<ISessionSkillMaterializer, SessionSkillMaterializer>();
         services.AddSingleton(new SessionHookOptions
         {
@@ -85,10 +88,10 @@ public static class TerminalsModule
         services.AddSingleton<ICapabilityProbe>(sp => sp.GetRequiredService<AppleTerminalOpener>());
 
         // Per-vendor login probes feed the vendor-card status and the readiness check
-        // (`GET /terminal/vendors` → login_status). opencode has no probe — it is surfaced
-        // statically as `in_development` by the catalog mapper.
+        // (`GET /terminal/vendors` → login_status).
         services.AddSingleton<IAgentVendorLoginProbe, ClaudeLoginProbe>();
         services.AddSingleton<IAgentVendorLoginProbe, CodexLoginProbe>();
+        services.AddSingleton<IAgentVendorLoginProbe, OpencodeLoginProbe>();
 
         return services;
     }

@@ -58,7 +58,7 @@ export interface paths {
         get: operations["getTerminalSettings"];
         /**
          * Set the default agent vendor for new terminal sessions.
-         * @description Persists `default_terminal_vendor` (claude | codex). Idempotent upsert of the settings singleton; takes effect on the next launch (live sessions are not touched).
+         * @description Persists `default_terminal_vendor` (claude | codex | opencode). Idempotent upsert of the settings singleton; takes effect on the next launch (live sessions are not touched).
          */
         put: operations["setTerminalSettings"];
         post?: never;
@@ -331,7 +331,7 @@ export interface components {
             status: components["schemas"]["LocalModelDiscoveryStatus"];
             /** @description The probed `Throne:LocalModel:BaseUrl`. Null only when `status=not_configured`. */
             base_url?: string | null;
-            /** @description Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers and a future OpenCode `provider.models` map. Empty unless `status=ready`. */
+            /** @description Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers. Empty unless `status=ready`. (No terminal vendor consumes this channel anymore — the OpenCode vendor reads the operator's own opencode model surface, ADR-0054.) */
             models: string[];
             /** @description Probe failure detail. Present only when `status=unreachable`. */
             error?: string | null;

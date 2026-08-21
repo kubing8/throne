@@ -9,8 +9,9 @@ namespace Throne.Api.Terminals;
 /// <summary>
 /// Projects <see cref="TerminalAgentCatalog"/> into the wire DTO for
 /// <c>GET /api/v1/terminal/vendors</c>. Backend stays the single source of truth for vendor
-/// metadata; the frontend reads this instead of mirroring the catalog. For descriptors with
-/// <see cref="TerminalAgentCatalog.ModelSourceLocal"/> the static
+/// metadata; the frontend reads this instead of mirroring the catalog. For descriptors with a
+/// dynamic <see cref="TerminalAgentCatalog.ModelSourceAgent"/> (or
+/// <see cref="TerminalAgentCatalog.ModelSourceLocal"/>) the static
 /// <see cref="TerminalVendorDescriptor.Models"/> is empty and the live list is fetched via the
 /// matching <see cref="IVendorModelCatalog"/>.
 ///
@@ -18,7 +19,7 @@ namespace Throne.Api.Terminals;
 /// login via <see cref="IAgentVendorLoginProbe"/>) and a <c>selectable</c> flag: the settings
 /// vendor cards render all vendors with their status, while the launch dropdowns keep only
 /// <c>selectable=true</c>. A vendor is non-selectable when it is <c>in_development</c>
-/// (currently <c>opencode</c>) or its <see cref="TerminalVendorDescriptor.RequiredCapability"/>
+/// (reserved; no current vendor) or its <see cref="TerminalVendorDescriptor.RequiredCapability"/>
 /// is unavailable (capability toggle off or prerequisite probe undetected) — mirroring the
 /// GitLab pattern from ADR-0032 § 8.
 /// </summary>
@@ -117,7 +118,7 @@ public sealed class TerminalVendorCatalogMapper(
     private async Task<IList<string>> ResolveModelsAsync(
         TerminalVendorDescriptor descriptor, CancellationToken ct)
     {
-        if (descriptor.ModelSource == TerminalAgentCatalog.ModelSourceLocal
+        if (descriptor.ModelSource != TerminalAgentCatalog.ModelSourceStatic
             && _dynamicCatalogs.TryGetValue(descriptor.Vendor, out var dynamicCatalog))
         {
             var live = await dynamicCatalog.ListModelsAsync(ct);
@@ -139,6 +140,7 @@ public sealed class TerminalVendorCatalogMapper(
     {
         TerminalAgentCatalog.ModelSourceStatic => TerminalModelSource.Static,
         TerminalAgentCatalog.ModelSourceLocal => TerminalModelSource.Local,
+        TerminalAgentCatalog.ModelSourceAgent => TerminalModelSource.Agent,
         _ => throw new InvalidOperationException($"Unknown model source '{source}'."),
     };
 }

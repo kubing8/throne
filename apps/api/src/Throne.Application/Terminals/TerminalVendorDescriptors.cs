@@ -42,14 +42,15 @@ public static class TerminalVendorDescriptors
         ],
         SupportsNativeHotAttach: true);
 
-    // OpenCode reads its top-level provider/model from the workspace-local `opencode.json` that
-    // the session-hook adapter writes (npm = "@ai-sdk/openai-compatible", baseURL = local /v1
-    // endpoint, models map = live discovery). The spawn argv carries no model/effort flag: the
+    // OpenCode reads its top-level provider/model setup from the operator's own opencode
+    // configuration — Throne materialises neither a provider entry nor a model map in the
+    // workspace `opencode.json` (the session-hook adapter only adds `instructions` + the
+    // per-launch `model` default there). The spawn argv carries no model/effort flag: the
     // agent loop runs in a shared `opencode serve`, not in this pane, and the model is pinned
-    // server-side on the prompt (`prompt_async` model={providerID,modelID}) by the session-hook
-    // adapter. The pane only runs `opencode attach <url> --session <id>` — the adapter supplies
-    // that whole argv as prepared args, so BuildBaseArgs is empty. No effort axis either:
-    // OpenCode does not surface reasoning-effort tiers (SupportsEffort=false).
+    // server-side on the prompt (`prompt_async` model={providerID,modelID}) by the
+    // session-hook adapter. The pane only runs `opencode attach <url> --session <id>` — the
+    // adapter supplies that whole argv as prepared args, so BuildBaseArgs is empty. No effort
+    // axis either: OpenCode does not surface reasoning-effort tiers (SupportsEffort=false).
     public static readonly TerminalVendorDescriptor Opencode = new(
         Vendor: TerminalAgentCatalog.VendorOpencode,
         Label: "OpenCode",
@@ -57,12 +58,12 @@ public static class TerminalVendorDescriptors
         SupportsEffort: false,
         Efforts: [],
         DefaultEffort: null,
-        ModelSource: TerminalAgentCatalog.ModelSourceLocal,
+        // Model list is the operator's own opencode surface: providers they connected in the
+        // CLI (`opencode auth login` / /connect), flattened to `provider/model` ids from the
+        // shared serve (ADR-0054). Empty until the serve answers — surfaced to the operator
+        // instead of guessing a phantom default.
+        ModelSource: TerminalAgentCatalog.ModelSourceAgent,
         BuildBaseArgs: static _ => [],
-        // Pinned to local models (Throne:LocalModel, ADR-0042); local models are temporarily
-        // unsupported, so opencode is surfaced as `in_development` — visible but not launchable
-        // and excluded from the readiness check. Full rework tracked as a child intent.
-        InDevelopment: true,
         // OpenCode TUI needs mouse reporting on in the tmux pane for scroll/select to work.
         EnableMouse: true);
 }

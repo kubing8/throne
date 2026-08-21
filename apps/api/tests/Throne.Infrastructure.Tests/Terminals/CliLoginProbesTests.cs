@@ -51,6 +51,23 @@ public class CliLoginProbesTests
         result.Detail.Should().Be("codex login");
     }
 
+    [Fact(DisplayName = "OpencodeLoginProbe: auth list exit 0 → Ready; exit !=0 → подсказка auth login")]
+    public async Task Opencode_probe_maps_exit_codes()
+    {
+        var ready = new OpencodeLoginProbe(
+            StubLauncher("opencode", exitCode: 0, stdout: "opencode\nanthropic\n"));
+        (await ready.ProbeAsync(CancellationToken.None)).Status
+            .Should().Be(AgentVendorLoginStatus.Ready);
+        ready.Vendor.Should().Be(TerminalAgentCatalog.VendorOpencode);
+
+        var loggedOut = new OpencodeLoginProbe(
+            StubLauncher("opencode", exitCode: 1, stdout: string.Empty));
+        var result = await loggedOut.ProbeAsync(CancellationToken.None);
+
+        result.Status.Should().Be(AgentVendorLoginStatus.LoggedOut);
+        result.Detail.Should().Be("opencode auth login");
+    }
+
     [Fact(DisplayName = "Login probe: CLI отсутствует (Win32Exception) → Missing, не бросает")]
     public async Task Probe_folds_missing_cli()
     {

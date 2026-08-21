@@ -28,8 +28,7 @@ const BADGE: Record<LoginStatus, BadgeMeta> = {
 
 /**
  * Settings → «Агенты»: информационная карточка со всеми вендорами каталога и их
- * login-статусом. Без тоглов — только статус. Несамовыбираемые вендоры (opencode
- * «в разработке») приглушены, но показаны, чтобы оператор видел задел.
+ * login-статусом. Без тоглов — только статус.
  */
 export function AgentVendorsCard() {
   const query = useTerminalVendorCatalogQuery();

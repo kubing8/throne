@@ -1,8 +1,5 @@
 using System.Text.Json;
 using FluentAssertions;
-using NSubstitute;
-using Throne.Application.LocalModels;
-using Throne.Application.Ports;
 using Throne.Application.Terminals;
 using Throne.Domain.Repositories;
 using Throne.Infrastructure.Terminals;
@@ -17,7 +14,7 @@ public class OpencodeSessionSkillPackageTests
     public async Task Review_writes_artifact_script_and_instruction_hint()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"]);
+        var sut = NewAdapter();
 
         await sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Review, systemPrompt: null,
@@ -44,7 +41,7 @@ public class OpencodeSessionSkillPackageTests
     public async Task Interview_writes_intent_operations_script_and_instruction_hint()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"]);
+        var sut = NewAdapter();
 
         await sut.PrepareSpawnArgsAsync(
             "intent-1",
@@ -69,22 +66,12 @@ public class OpencodeSessionSkillPackageTests
         hint.Should().Contain("create --text-file");
     }
 
-    private static OpencodeSessionHookAdapter NewAdapter(
-        string? baseUrl,
-        IReadOnlyList<string> models)
-    {
-        var catalog = Substitute.For<ILocalModelCatalogPort>();
-        catalog.ListModelIdsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(models));
-        var discovery = new LocalModelDiscoveryService(new LocalModelSettings { BaseUrl = baseUrl }, catalog);
-
-        return new OpencodeSessionHookAdapter(
-            discovery,
+    private static OpencodeSessionHookAdapter NewAdapter() =>
+        new(
             HookOptions,
             new SessionSkillMaterializer(),
             new FixedServeGateway(),
             new NoopTuiClient());
-    }
 
     private sealed class FixedServeGateway : IOpencodeServeGateway
     {

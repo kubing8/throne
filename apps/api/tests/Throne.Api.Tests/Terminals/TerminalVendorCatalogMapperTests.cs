@@ -12,12 +12,14 @@ public class TerminalVendorCatalogMapperTests
         IVendorModelCatalog[]? dynamicCatalogs = null,
         AgentVendorLoginStatus claudeLogin = AgentVendorLoginStatus.Ready,
         AgentVendorLoginStatus codexLogin = AgentVendorLoginStatus.LoggedOut,
+        AgentVendorLoginStatus opencodeLogin = AgentVendorLoginStatus.Ready,
         CapabilityProbeResult? tmux = null)
     {
         IAgentVendorLoginProbe[] probes =
         [
             new StubLoginProbe(TerminalAgentCatalog.VendorClaude, claudeLogin),
             new StubLoginProbe(TerminalAgentCatalog.VendorCodex, codexLogin),
+            new StubLoginProbe(TerminalAgentCatalog.VendorOpencode, opencodeLogin),
         ];
         var catalog = new TerminalVendorCatalog(
         [
@@ -70,24 +72,25 @@ public class TerminalVendorCatalogMapperTests
         codex.Model_source.Should().Be(TerminalModelSource.Static);
     }
 
-    [Fact(DisplayName = "opencode metadata: модели подставляются из live discovery, эффорт отключён")]
+    [Fact(DisplayName = "opencode metadata: модели подставляются из live каталога, эффорт отключён, source=agent")]
     public async Task Maps_opencode_metadata_from_dynamic_catalog()
     {
-        var dynamicCatalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["llama-4", "qwen-3"]);
+        var dynamicCatalog = new StubCatalog(
+            TerminalAgentCatalog.VendorOpencode, ["opencode/gpt-5.1-codex", "anthropic/claude-sonnet-4-5"]);
         var dto = await Build([dynamicCatalog]).ToDtoAsync(CancellationToken.None);
         var opencode = dto.Vendors.Single(v => v.Vendor == TerminalAgentCatalog.VendorOpencode);
 
         opencode.Label.Should().Be("OpenCode");
-        opencode.Models.Should().Equal("llama-4", "qwen-3");
-        opencode.Default_model.Should().Be("llama-4");
+        opencode.Models.Should().Equal("opencode/gpt-5.1-codex", "anthropic/claude-sonnet-4-5");
+        opencode.Default_model.Should().Be("opencode/gpt-5.1-codex");
         opencode.Supports_effort.Should().BeFalse();
         opencode.Efforts.Should().BeEmpty();
         opencode.Default_effort.Should().BeNull();
-        opencode.Model_source.Should().Be(TerminalModelSource.Local);
+        opencode.Model_source.Should().Be(TerminalModelSource.Agent);
     }
 
     [Fact(DisplayName = "opencode metadata: пустой live-список → default_model=null, models=[]")]
-    public async Task Maps_opencode_metadata_when_local_endpoint_empty()
+    public async Task Maps_opencode_metadata_when_agent_catalog_empty()
     {
         var dynamicCatalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, []);
         var dto = await Build([dynamicCatalog]).ToDtoAsync(CancellationToken.None);
@@ -123,17 +126,18 @@ public class TerminalVendorCatalogMapperTests
         claude.Selectable.Should().BeTrue();
     }
 
-    [Fact(DisplayName = "opencode: помечен как in_development и не selectable")]
-    public async Task Opencode_is_in_development_and_not_selectable()
+    [Fact(DisplayName = "opencode: проба логина отражается, selectable=true (паритет с claude/codex)")]
+    public async Task Opencode_login_probe_maps_and_vendor_is_selectable()
     {
-        var dynamicCatalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["llama-4"]);
+        var dynamicCatalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["opencode/gpt-5.1-codex"]);
 
-        var dto = await Build([dynamicCatalog]).ToDtoAsync(CancellationToken.None);
+        var dto = await Build(
+            [dynamicCatalog],
+            opencodeLogin: AgentVendorLoginStatus.LoggedOut).ToDtoAsync(CancellationToken.None);
         var opencode = dto.Vendors.Single(v => v.Vendor == TerminalAgentCatalog.VendorOpencode);
 
-        opencode.Login_status.Should().Be(TerminalVendorLoginStatus.In_development);
-        opencode.Selectable.Should().BeFalse();
-        opencode.Login_detail.Should().Be("в разработке");
+        opencode.Login_status.Should().Be(TerminalVendorLoginStatus.Logged_out);
+        opencode.Selectable.Should().BeTrue();
     }
 
     [Fact(DisplayName = "runtime.tmux: проба детекта tmux пробрасывается в runtime-prerequisites")]

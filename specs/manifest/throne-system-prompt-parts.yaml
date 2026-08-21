@@ -66,6 +66,9 @@ dream_sources:
   - vendor: codex-cli
     path: ~/.codex/sessions
     hint: "rollout-*.jsonl per session."
+  - vendor: opencode
+    path: ~/.local/share/opencode
+    hint: "SQLite opencode.db (sessions/messages) shared across projects; per-project storage may also exist. Inspect layout before reading."
 
 bundles:
   - mode: interview

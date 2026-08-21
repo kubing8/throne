@@ -24,18 +24,23 @@ public static class TerminalAgentCatalog
 
     /// <summary>
     /// Model list is materialised at projection time from the operator's local OpenAI-compatible
-    /// endpoint (<c>Throne:LocalModel:BaseUrl</c>, probed via <c>GET /v1/models</c>). Used by
-    /// <see cref="VendorOpencode"/>; the static <see cref="TerminalVendorDescriptor.Models"/>
-    /// list on a <c>local</c> descriptor is empty by design.
+    /// endpoint (<c>Throne:LocalModel:BaseUrl</c>, probed via <c>GET /v1/models</c>). No current
+    /// vendor uses this source (the local-model channel stays a settings-only probe); the static
+    /// <see cref="TerminalVendorDescriptor.Models"/> list on a <c>local</c> descriptor is empty
+    /// by design.
     /// </summary>
     public const string ModelSourceLocal = "local";
 
     /// <summary>
-    /// OpenCode provider id materialised in the generated <c>opencode.json</c> and prefixed onto
-    /// the <c>--model</c> flag (<c>throne-local/&lt;modelId&gt;</c>). Public so the resolver, the
-    /// session-hook adapter, and tests all spell it identically.
+    /// Model list is discovered live from the agent CLI itself: the models the operator enabled
+    /// and authenticated in the agent's own configuration (for <see cref="VendorOpencode"/> —
+    /// providers connected in the operator's opencode, flattened to <c>provider/model</c> ids by
+    /// the serve's <c>GET /provider</c>). The static
+    /// <see cref="TerminalVendorDescriptor.Models"/> list on an <c>agent</c> descriptor is empty
+    /// by design; an empty live list means the CLI is missing, unauthenticated, or its serve
+    /// cannot start.
     /// </summary>
-    public const string OpencodeProviderId = "throne-local";
+    public const string ModelSourceAgent = "agent";
 
     /// <summary>Vendor used when neither the request nor settings pin one.</summary>
     public const string DefaultVendor = VendorClaude;

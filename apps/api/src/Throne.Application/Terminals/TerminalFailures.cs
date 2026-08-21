@@ -59,12 +59,17 @@ internal static class TerminalFailures
             new Dictionary<string, object?> { ["vendor"] = descriptor.Vendor, ["model"] = model });
 
     private static string BuildModelInvalidDetail(TerminalVendorDescriptor descriptor, string model) =>
-        // For local-sourced vendors the static `Models` list is empty by design — the live list
-        // comes from the operator's local endpoint, so phrase the error around that channel
+        // For dynamic-sourced vendors the static `Models` list is empty by design — the live
+        // list comes from the vendor's own channel, so phrase the error around that channel
         // instead of listing nothing as the allowed set.
-        descriptor.ModelSource == TerminalAgentCatalog.ModelSourceLocal
-            ? $"Model '{model}' is not advertised by the local OpenAI-compatible endpoint for vendor '{descriptor.Vendor}'. Configure Throne:LocalModel:BaseUrl and verify GET /v1/models."
-            : $"Model '{model}' is not in the curated whitelist for vendor '{descriptor.Vendor}'. Allowed: {string.Join(" | ", descriptor.Models)}.";
+        descriptor.ModelSource switch
+        {
+            TerminalAgentCatalog.ModelSourceLocal =>
+                $"Model '{model}' is not advertised by the local OpenAI-compatible endpoint for vendor '{descriptor.Vendor}'. Configure Throne:LocalModel:BaseUrl and verify GET /v1/models.",
+            TerminalAgentCatalog.ModelSourceAgent =>
+                $"Model '{model}' is not offered by vendor '{descriptor.Vendor}' (its live model list is whatever the agent CLI itself reports). Verify the agent CLI is installed and authenticated (`opencode auth login`) and that the model is enabled in its settings.",
+            _ => $"Model '{model}' is not in the curated whitelist for vendor '{descriptor.Vendor}'. Allowed: {string.Join(" | ", descriptor.Models)}.",
+        };
 
     public static ApiException EffortInvalid(string effort) =>
         new(
