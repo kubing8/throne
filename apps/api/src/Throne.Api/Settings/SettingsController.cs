@@ -33,7 +33,13 @@ public sealed class SettingsController(
     public override async Task<ActionResult<TerminalSettingsDto>> GetTerminalSettings()
     {
         var vendor = await terminalSettings.GetDefaultVendorAsync(HttpContext.RequestAborted);
-        return Ok(new TerminalSettingsDto { Default_vendor = vendor });
+        var last = await terminalSettings.GetLastLaunchAsync(HttpContext.RequestAborted);
+        return Ok(new TerminalSettingsDto
+        {
+            Default_vendor = vendor,
+            Last_vendor = last.Vendor,
+            Last_model = last.Model
+        });
     }
 
     public override async Task<ActionResult<TerminalSettingsDto>> SetTerminalSettings(UpdateTerminalSettingsRequest body)
@@ -41,7 +47,13 @@ public sealed class SettingsController(
         ArgumentNullException.ThrowIfNull(body);
         var saved = await terminalSettings.SetDefaultVendorAsync(
             body.Default_vendor, HttpContext.RequestAborted);
-        return Ok(new TerminalSettingsDto { Default_vendor = saved });
+        var last = await terminalSettings.GetLastLaunchAsync(HttpContext.RequestAborted);
+        return Ok(new TerminalSettingsDto
+        {
+            Default_vendor = saved,
+            Last_vendor = last.Vendor,
+            Last_model = last.Model
+        });
     }
 
     public override async Task<ActionResult<SkillModeDefaultsDto>> GetSkillModeDefaults()

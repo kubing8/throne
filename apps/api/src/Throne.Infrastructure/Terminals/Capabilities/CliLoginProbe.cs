@@ -90,3 +90,13 @@ internal sealed class CodexLoginProbe(IProcessLauncher launcher) : CliLoginProbe
     protected override IReadOnlyList<string> StatusArguments => ["login", "status"];
     protected override string LoginHint => "codex login";
 }
+
+/// <summary>opencode login probe — <c>opencode auth list</c> (lists the authenticated
+/// providers from the operator's opencode credentials file; exit 0 iff signed in).</summary>
+internal sealed class OpencodeLoginProbe(IProcessLauncher launcher) : CliLoginProbe(launcher)
+{
+    public override string Vendor => TerminalAgentCatalog.VendorOpencode;
+    protected override string FileName => "opencode";
+    protected override IReadOnlyList<string> StatusArguments => ["auth", "list"];
+    protected override string LoginHint => "opencode auth login";
+}

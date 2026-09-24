@@ -172,7 +172,6 @@ public static class DependencyInjection
         services.AddSingleton<TerminalLaunchResolver>();
         services.AddSingleton<TerminalSettingsService>();
         services.AddSingleton<LocalModelDiscoveryService>();
-        services.AddSingleton<IVendorModelCatalog, OpencodeLocalModelCatalog>();
         services.AddSingleton<TerminalSessionStatusService>();
         services.AddSingleton<TerminalSessionKillService>();
         return services;

@@ -3,14 +3,14 @@ namespace Throne.Application.Terminals;
 /// <summary>
 /// Provider-neutral capability descriptor for one embedded-terminal vendor. Holds the
 /// vendor token, display label, the static curated model whitelist (for
-/// <see cref="ModelSource"/> = <c>static</c>; empty for <c>local</c>), whether the vendor
+/// <see cref="ModelSource"/> = <c>static</c>; empty for dynamic sources), whether the vendor
 /// exposes a reasoning-effort axis (with its native default), the provenance of the model
 /// list, and the spawn-argv builder.
 /// <see cref="TerminalAgentCatalog"/> owns the closed set of descriptors; the resolver and
 /// the spawn command read everything vendor-specific from here instead of switching on the
-/// vendor token. For <c>local</c>-sourced vendors the live model list is materialised at
-/// catalog-projection time from the operator's local OpenAI-compatible endpoint, not from
-/// <see cref="Models"/>.
+/// vendor token. For dynamic-sourced vendors (<c>local</c>, <c>agent</c>) the live model
+/// list is materialised at catalog-projection time through <see cref="IVendorModelCatalog"/>,
+/// not from <see cref="Models"/>.
 ///
 /// Invariant: <see cref="SupportsEffort"/> ⇔ <see cref="DefaultEffort"/> is non-null and
 /// <see cref="Efforts"/> is non-empty. A vendor without an effort axis carries a null
@@ -36,8 +36,8 @@ public sealed record TerminalVendorDescriptor(
 {
     /// <summary>
     /// Static native default model = first entry of <see cref="Models"/>. Null when the
-    /// list is empty (only possible for <see cref="ModelSource"/> = <c>local</c>; that
-    /// branch falls back to whatever the live endpoint advertises first).
+    /// list is empty (only possible for dynamic model sources; that branch falls back to
+    /// whatever the live catalog reports first).
     /// </summary>
     public string? DefaultModel => Models.Count == 0 ? null : Models[0];
 

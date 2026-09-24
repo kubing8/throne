@@ -14,7 +14,7 @@ public class OpencodeTuiClientTests
         var client = new OpencodeTuiClient(new FixedHttpClientFactory(new HttpClient(handler)));
 
         var sessionId = await client.CreateSessionAndSubmitAsync(
-            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "throne-local", "qwen-3", "TASK\nbody",
+            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "opencode", "gpt-5.1-codex", "TASK\nbody",
             CancellationToken.None);
 
         sessionId.Should().Be("ses_test");
@@ -30,11 +30,11 @@ public class OpencodeTuiClientTests
         var client = new OpencodeTuiClient(new FixedHttpClientFactory(new HttpClient(handler)));
 
         await client.CreateSessionAndSubmitAsync(
-            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "throne-local", "qwen-3", "TASK\nbody",
+            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "opencode", "gpt-5.1-codex", "TASK\nbody",
             CancellationToken.None);
 
         var promptBody = handler.Requests.Single(r => r.PathAndQuery.Contains("prompt_async")).Body;
-        promptBody.Should().Contain("\"model\":{\"providerID\":\"throne-local\",\"modelID\":\"qwen-3\"}");
+        promptBody.Should().Contain("\"model\":{\"providerID\":\"opencode\",\"modelID\":\"gpt-5.1-codex\"}");
         promptBody.Should().Contain("\"parts\":[{\"type\":\"text\",\"text\":\"TASK\\nbody\"}]");
     }
 
@@ -45,7 +45,7 @@ public class OpencodeTuiClientTests
         var client = new OpencodeTuiClient(new FixedHttpClientFactory(new HttpClient(handler)));
 
         var act = () => client.CreateSessionAndSubmitAsync(
-            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "throne-local", "qwen-3", "TASK",
+            new Uri("http://127.0.0.1:4096/"), "/tmp/ws", "opencode", "gpt-5.1-codex", "TASK",
             CancellationToken.None);
 
         await act.Should().ThrowAsync<HttpRequestException>();

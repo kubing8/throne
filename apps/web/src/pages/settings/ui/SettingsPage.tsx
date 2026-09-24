@@ -49,7 +49,7 @@ export function SettingsPage() {
         id="agents"
         title="Агенты"
         icon={Bot}
-        description="Каким агентом (claude или codex) предзаполнять запуск новых сессий и статус логина каждого CLI. Модель и усилие выбираются per-сессия на странице интента."
+        description="Каким агентом (claude, codex или opencode) предзаполнять запуск новых сессий и статус логина каждого CLI. Модель и усилие выбираются per-сессия на странице интента."
       >
         <TerminalDefaultsCard />
         <AgentVendorsCard />

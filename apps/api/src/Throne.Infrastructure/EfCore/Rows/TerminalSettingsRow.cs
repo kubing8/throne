@@ -11,4 +11,6 @@ internal sealed class TerminalSettingsRow
 
     public string Id { get; set; } = SingletonId;
     public string DefaultVendor { get; set; } = string.Empty;
+    public string? LastVendor { get; set; }
+    public string? LastModel { get; set; }
 }

@@ -36,6 +36,12 @@ namespace Throne.Settings.Contracts.Generated
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^[a-z0-9][a-z0-9-]*$")]
         public string Default_vendor { get; set; }
 
+        [System.Text.Json.Serialization.JsonPropertyName("last_vendor")]
+        public string Last_vendor { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("last_model")]
+        public string Last_model { get; set; }
+
         private System.Collections.Generic.IDictionary<string, object> _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -393,7 +399,7 @@ namespace Throne.Settings.Contracts.Generated
         public string Base_url { get; set; }
 
         /// <summary>
-        /// Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers and a future OpenCode `provider.models` map. Empty unless `status=ready`.
+        /// Normalized model ids from `/v1/models`, deduplicated in advertised order. Stable shape for backend metadata consumers. Empty unless `status=ready`. (No terminal vendor consumes this channel anymore — the OpenCode vendor reads the operator's own opencode model surface, ADR-0054.)
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("models")]

@@ -1,6 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Throne.Application.LocalModels;
+using System.Text.Json.Nodes;
 using Throne.Application.Terminals;
 
 namespace Throne.Infrastructure.Terminals;
@@ -10,18 +10,20 @@ namespace Throne.Infrastructure.Terminals;
 /// workspace-local files the OpenCode CLI auto-discovers at startup
 /// (it searches the working directory upward to the nearest git root):
 /// <list type="bullet">
-///   <item>Provider wiring: a single <c>@ai-sdk/openai-compatible</c> provider keyed by
-///   <see cref="TerminalAgentCatalog.OpencodeProviderId"/>, pointed at the operator's local
-///   endpoint (<c>Throne:LocalModel:BaseUrl</c>) with an explicit <c>models</c> map mirroring
-///   the live <c>/v1/models</c> snapshot. The catalog/resolver already validated the chosen
-///   model against the same snapshot — the spawn argv just pins it with
-///   <c>--model throne-local/&lt;modelId&gt;</c> (wired by the descriptor's
-///   <see cref="TerminalVendorDescriptor.BuildBaseArgs"/>).</item>
 ///   <item>System-context delivery: OpenCode loads <c>instructions</c>-listed files as
 ///   ambient guidance, so the assembled rules block is written next to the config and
 ///   referenced from there — no inlining on the spawn argv. (Mirrors why the Claude/Codex
 ///   adapters route their multi-KB rules through a file: tmux's spawn imsg has a ~16 KB
-///   cap.)</item>
+///   cap.) The workspace <c>opencode.json</c> may be a file the cloned repo itself owns, so
+///   Throne merges its instruction references into it instead of clobbering the repo's own
+///   OpenCode settings; stale <c>throne-session.*</c> entries from a previous spawn of the
+///   same intent are replaced idempotently.</item>
+///   <item>Model wiring: providers/models are the operator's own opencode surface (their
+///   auth + enabled models) — Throne writes no <c>provider</c> section at all. The launch-axis
+///   model arrives as a <c>provider/model</c> id (live catalog, ADR-0054): it is pinned on the
+///   initial prompt body (<c>prompt_async model={providerID,modelID}</c>) and also set as the
+///   workspace config's top-level <c>model</c> default, so a bare front and later
+///   operator-typed prompts resolve to the same choice.</item>
 ///   <item>Lifecycle hooks: OpenCode 1.17.7+ auto-loads project plugins from
 ///   <c>.opencode/plugins</c>, so the adapter writes a per-session shim that maps OpenCode
 ///   lifecycle events onto the existing Throne hook endpoint.</item>
@@ -32,7 +34,6 @@ namespace Throne.Infrastructure.Terminals;
 /// submitted server-side, and the operator pane only attaches to the returned session id.
 /// </summary>
 internal sealed class OpencodeSessionHookAdapter(
-    LocalModelDiscoveryService localModels,
     SessionHookOptions hookOptions,
     ISessionSkillMaterializer skillMaterializer,
     IOpencodeServeGateway serveGateway,
@@ -41,8 +42,10 @@ internal sealed class OpencodeSessionHookAdapter(
     private const string ConfigFileName = "opencode.json";
     private const string SystemPromptFileName = "throne-session.append-system-prompt.txt";
     private const string SchemaUrl = "https://opencode.ai/config.json";
-    private const string OpenAiCompatibleNpm = "@ai-sdk/openai-compatible";
-    private const string ProviderDisplayName = "Throne Local";
+
+    /// <summary>Every per-session file this adapter drops into the workspace starts with this
+    /// prefix — the instruction list rewrite uses it to replace stale spawn entries.</summary>
+    private const string ThroneFilePrefix = "throne-session.";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -68,13 +71,6 @@ internal sealed class OpencodeSessionHookAdapter(
 
         Directory.CreateDirectory(workspacePath);
 
-        var discovery = await localModels.DiscoverAsync(ct);
-        // Catalog/resolver gates the spawn before we get here, so a non-ready discovery would
-        // only happen on a TOCTOU window between resolution and spawn. Writing whatever the
-        // probe currently sees is the same behaviour the resolver enforces and keeps the file
-        // valid JSON instead of half-empty.
-        var baseUrl = discovery.BaseUrl ?? string.Empty;
-
         await OpencodePluginShim.WriteAsync(
             workspacePath, intentId, mode, NormalizeBaseUrl(hookOptions.ApiBaseUrl), ct);
         var materialization = await skillMaterializer.MaterializeAsync(
@@ -85,17 +81,7 @@ internal sealed class OpencodeSessionHookAdapter(
             .Select(skill => skill.SkillFileName)
             .OfType<string>()
             .ToArray();
-        var configPath = Path.Combine(workspacePath, ConfigFileName);
-        await using (var stream = File.Create(configPath))
-        {
-            var document = BuildConfig(
-                baseUrl,
-                discovery.Models,
-                systemPromptPath,
-                skillHints);
-            await JsonSerializer.SerializeAsync(stream, document, JsonOptions, ct);
-            await stream.WriteAsync("\n"u8.ToArray(), ct);
-        }
+        await WriteConfigAsync(workspacePath, InstructionFiles(systemPromptPath, skillHints), ct);
 
         // The agent runs in the shared `opencode serve`, not in this pane — the spawn argv carries
         // no server/model flags. The attach argv is produced later by InitializeSessionAsync, once
@@ -110,6 +96,15 @@ internal sealed class OpencodeSessionHookAdapter(
         string? userPrompt,
         CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(model);
+        var (providerId, modelId) = SplitModelId(model);
+
+        // Pin the launch-axis model as the workspace default before anything resolves config in
+        // this directory: the initial prompt below pins it on the message body explicitly, while
+        // a bare front (empty task) and later operator-typed prompts fall back to the config
+        // default and land on the same model.
+        await WriteDefaultModelAsync(workspacePath, model, ct);
+
         var endpoint = await serveGateway.EnsureRunningAsync(ct);
 
         // `opencode attach <url> [--session <id>]`: the front pulls the session by id (no race).
@@ -128,7 +123,7 @@ internal sealed class OpencodeSessionHookAdapter(
         if (!string.IsNullOrWhiteSpace(userPrompt))
         {
             var sessionId = await tuiClient.CreateSessionAndSubmitAsync(
-                endpoint, workspacePath, TerminalAgentCatalog.OpencodeProviderId, model, userPrompt!, ct);
+                endpoint, workspacePath, providerId, modelId, userPrompt!, ct);
             attach.Add("--session");
             attach.Add(sessionId);
         }
@@ -161,34 +156,20 @@ internal sealed class OpencodeSessionHookAdapter(
         return path;
     }
 
-    private static OpencodeConfigDocument BuildConfig(
-        string baseUrl,
-        IReadOnlyList<string> modelIds,
-        string? systemPromptPath,
-        IReadOnlyList<string> skillHints)
+    // OpenCode model ids are `provider/model` on the wire (the live catalog is flattened from the
+    // serve's provider surface, ADR-0054); the prompt API wants the pair split.
+    private static (string ProviderId, string ModelId) SplitModelId(string model)
     {
-        var models = new Dictionary<string, OpencodeConfigModel>(StringComparer.Ordinal);
-        foreach (var id in modelIds)
+        var separator = model.IndexOf('/');
+        if (separator <= 0 || separator == model.Length - 1)
         {
-            models[id] = new OpencodeConfigModel(Name: id);
+            throw new InvalidOperationException(
+                $"OpenCode model '{model}' is not in the provider/model format.");
         }
-
-        var provider = new OpencodeConfigProvider(
-            Npm: OpenAiCompatibleNpm,
-            Name: ProviderDisplayName,
-            Options: new OpencodeConfigProviderOptions(BaseURL: baseUrl),
-            Models: models);
-
-        return new OpencodeConfigDocument(
-            Schema: SchemaUrl,
-            Provider: new Dictionary<string, OpencodeConfigProvider>(StringComparer.Ordinal)
-            {
-                [TerminalAgentCatalog.OpencodeProviderId] = provider,
-            },
-            Instructions: InstructionFiles(systemPromptPath, skillHints));
+        return (model[..separator], model[(separator + 1)..]);
     }
 
-    private static string[]? InstructionFiles(string? systemPromptPath, IReadOnlyList<string> skillHints)
+    private static string[] InstructionFiles(string? systemPromptPath, IReadOnlyList<string> skillHints)
     {
         var files = new List<string>();
         if (systemPromptPath is not null)
@@ -199,7 +180,82 @@ internal sealed class OpencodeSessionHookAdapter(
         {
             files.Add(hint);
         }
-        return files.Count == 0 ? null : files.ToArray();
+        return files.ToArray();
+    }
+
+    /// <summary>
+    /// Writes the workspace <c>opencode.json</c>, merging Throne's instruction references into a
+    /// file the cloned repo may itself own: repo-owned keys (agents, tools, permissions, model
+    /// overrides…) are preserved verbatim, the <c>instructions</c> array is rebuilt from the
+    /// repo's own entries plus the fresh per-spawn Throne files. An unparsable or non-object
+    /// pre-existing file is treated as absent.
+    /// </summary>
+    private static async Task WriteConfigAsync(
+        string workspacePath, IReadOnlyList<string> instructionFiles, CancellationToken ct)
+    {
+        var root = await ReadConfigAsync(workspacePath, ct) ?? NewConfig();
+        var instructions = new JsonArray();
+        if (root["instructions"] is JsonArray existing)
+        {
+            foreach (var entry in existing)
+            {
+                if (entry is JsonValue value
+                    && value.TryGetValue<string>(out var file)
+                    && !file.StartsWith(ThroneFilePrefix, StringComparison.Ordinal))
+                {
+                    instructions.Add(file);
+                }
+            }
+        }
+
+        foreach (var file in instructionFiles)
+        {
+            instructions.Add(file);
+        }
+
+        if (instructions.Count == 0)
+        {
+            root.Remove("instructions");
+        }
+        else
+        {
+            root["instructions"] = instructions;
+        }
+
+        await WriteConfigAsync(workspacePath, root, ct);
+    }
+
+    private static async Task WriteDefaultModelAsync(
+        string workspacePath, string model, CancellationToken ct)
+    {
+        var root = await ReadConfigAsync(workspacePath, ct) ?? NewConfig();
+        root["model"] = model;
+        await WriteConfigAsync(workspacePath, root, ct);
+    }
+
+    private static JsonObject NewConfig() => new() { ["$schema"] = SchemaUrl };
+
+    private static async Task<JsonObject?> ReadConfigAsync(string workspacePath, CancellationToken ct)
+    {
+        var configPath = Path.Combine(workspacePath, ConfigFileName);
+        if (!File.Exists(configPath))
+        {
+            return null;
+        }
+        try
+        {
+            return JsonNode.Parse(await File.ReadAllTextAsync(configPath, ct)) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task WriteConfigAsync(string workspacePath, JsonObject root, CancellationToken ct)
+    {
+        var configPath = Path.Combine(workspacePath, ConfigFileName);
+        await File.WriteAllTextAsync(configPath, root.ToJsonString(JsonOptions) + "\n", ct);
     }
 
     private static string NormalizeBaseUrl(string? apiBaseUrl) =>

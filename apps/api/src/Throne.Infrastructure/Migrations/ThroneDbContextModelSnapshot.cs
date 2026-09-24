@@ -1053,6 +1053,14 @@ namespace Throne.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("default_vendor");
 
+                    b.Property<string>("LastModel")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_model");
+
+                    b.Property<string>("LastVendor")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_vendor");
+
                     b.HasKey("Id");
 
                     b.ToTable("terminal_settings", (string)null);

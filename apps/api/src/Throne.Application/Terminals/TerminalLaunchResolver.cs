@@ -17,12 +17,13 @@ public sealed record TerminalLaunchInput(string? Vendor, string? Model, string? 
 /// declares no effort axis resolves to a null effort — any effort the caller passed is
 /// dropped and no effort flag reaches the spawn argv.
 ///
-/// For vendors whose <see cref="TerminalVendorDescriptor.ModelSource"/> is
-/// <see cref="TerminalAgentCatalog.ModelSourceLocal"/> the static
-/// <see cref="TerminalVendorDescriptor.Models"/> is empty by design: the live list is
-/// fetched through the matching <see cref="IVendorModelCatalog"/>. An unconfigured or
-/// unreachable local endpoint surfaces as an empty list — the resolver fails the launch
-/// with the same args-invalid code rather than picking a phantom default.
+/// For vendors whose <see cref="TerminalVendorDescriptor.ModelSource"/> is not
+/// <see cref="TerminalAgentCatalog.ModelSourceStatic"/> (e.g.
+/// <see cref="TerminalAgentCatalog.ModelSourceAgent"/> — models the operator enabled in the
+/// agent CLI itself) the static <see cref="TerminalVendorDescriptor.Models"/> is empty by
+/// design: the live list is fetched through the matching <see cref="IVendorModelCatalog"/>.
+/// An unavailable source surfaces as an empty list — the resolver fails the launch with the
+/// same args-invalid code rather than picking a phantom default.
 /// </summary>
 public sealed class TerminalLaunchResolver(
     ITerminalSettingsStore settings,
@@ -61,11 +62,11 @@ public sealed class TerminalLaunchResolver(
         TerminalVendorDescriptor descriptor,
         string? requestedModel,
         CancellationToken ct) =>
-        descriptor.ModelSource == TerminalAgentCatalog.ModelSourceLocal
-            ? ResolveLocalModelAsync(descriptor, requestedModel, ct)
-            : Task.FromResult(ResolveStaticModel(descriptor, requestedModel));
+        descriptor.ModelSource == TerminalAgentCatalog.ModelSourceStatic
+            ? Task.FromResult(ResolveStaticModel(descriptor, requestedModel))
+            : ResolveDynamicModelAsync(descriptor, requestedModel, ct);
 
-    private async Task<string> ResolveLocalModelAsync(
+    private async Task<string> ResolveDynamicModelAsync(
         TerminalVendorDescriptor descriptor, string? requestedModel, CancellationToken ct)
     {
         if (!_dynamicCatalogs.TryGetValue(descriptor.Vendor, out var catalog))

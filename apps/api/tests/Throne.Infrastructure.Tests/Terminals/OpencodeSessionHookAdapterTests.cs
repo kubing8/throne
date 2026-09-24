@@ -1,9 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FluentAssertions;
-using NSubstitute;
-using Throne.Application.LocalModels;
-using Throne.Application.Ports;
 using Throne.Application.Terminals;
 using Throne.Infrastructure.Terminals;
 
@@ -13,20 +10,11 @@ public class OpencodeSessionHookAdapterTests
 {
     private static readonly SessionHookOptions HookOptions = new() { ApiBaseUrl = "http://localhost:5008/" };
 
-    private static LocalModelDiscoveryService BuildDiscovery(
-        string? baseUrl, IReadOnlyList<string> models)
-    {
-        var catalog = Substitute.For<ILocalModelCatalogPort>();
-        catalog.ListModelIdsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(models));
-        return new LocalModelDiscoveryService(new LocalModelSettings { BaseUrl = baseUrl }, catalog);
-    }
-
-    [Fact(DisplayName = "Пишет opencode.json и возвращает пустой spawn argv (loop живёт в shared serve)")]
-    public async Task Writes_opencode_config_and_returns_empty_argv()
+    [Fact(DisplayName = "Пишет opencode.json без provider-секции и возвращает пустой spawn argv")]
+    public async Task Writes_opencode_config_without_provider_and_returns_empty_argv()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4", "qwen-3"]);
+        var sut = NewAdapter();
 
         var args = await sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Work, systemPrompt: null, skillPackages: [], CancellationToken.None);
@@ -38,12 +26,8 @@ public class OpencodeSessionHookAdapterTests
 
         using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(configPath));
         doc.RootElement.GetProperty("$schema").GetString().Should().Be("https://opencode.ai/config.json");
-        var provider = doc.RootElement.GetProperty("provider").GetProperty("throne-local");
-        provider.GetProperty("npm").GetString().Should().Be("@ai-sdk/openai-compatible");
-        provider.GetProperty("options").GetProperty("baseURL").GetString().Should().Be("http://localhost:1234");
-        var models = provider.GetProperty("models");
-        models.GetProperty("llama-4").GetProperty("name").GetString().Should().Be("llama-4");
-        models.GetProperty("qwen-3").GetProperty("name").GetString().Should().Be("qwen-3");
+        // Providers/models are the operator's own opencode surface — Throne never writes them.
+        doc.RootElement.TryGetProperty("provider", out _).Should().BeFalse();
         doc.RootElement.TryGetProperty("instructions", out _).Should().BeFalse();
     }
 
@@ -51,7 +35,7 @@ public class OpencodeSessionHookAdapterTests
     public async Task Writes_system_prompt_and_references_it_by_filename()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"]);
+        var sut = NewAdapter();
 
         await sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Work, systemPrompt: "RULES\nblock", skillPackages: [], CancellationToken.None);
@@ -69,7 +53,7 @@ public class OpencodeSessionHookAdapterTests
     public async Task Blank_system_prompt_writes_no_file()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"]);
+        var sut = NewAdapter();
 
         await sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Work, systemPrompt: "   ", skillPackages: [], CancellationToken.None);
@@ -79,64 +63,109 @@ public class OpencodeSessionHookAdapterTests
         doc.RootElement.TryGetProperty("instructions", out _).Should().BeFalse();
     }
 
-    [Fact(DisplayName = "Пустой live discovery — opencode.json валиден с пустой картой моделей")]
-    public async Task Empty_discovery_writes_empty_models_map()
+    [Fact(DisplayName = "Repo-owned opencode.json: ключи репо сохранены, throne-инструкции смержены, stale заменены")]
+    public async Task Merges_instructions_into_repo_owned_config()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter(baseUrl: null, models: []);
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "opencode.json"), """
+            {
+              "$schema": "https://opencode.ai/config.json",
+              "theme": "my-theme",
+              "instructions": ["AGENTS.md", "throne-session.append-system-prompt.txt", "throne-session.intent.md"],
+              "agent": { "build": { "model": "anthropic/claude-sonnet-4-5" } }
+            }
+            """);
+        var sut = NewAdapter();
 
-        var args = await sut.PrepareSpawnArgsAsync(
+        await sut.PrepareSpawnArgsAsync(
+            "intent-1", root, TerminalRunModes.Work, systemPrompt: "RULES", skillPackages: [], CancellationToken.None);
+
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "opencode.json")));
+        // Repo-owned keys survive verbatim.
+        doc.RootElement.GetProperty("theme").GetString().Should().Be("my-theme");
+        doc.RootElement.GetProperty("agent").GetProperty("build").GetProperty("model")
+            .GetString().Should().Be("anthropic/claude-sonnet-4-5");
+        // Instructions = repo's own entries + fresh Throne files; stale throne-session.* replaced.
+        doc.RootElement.GetProperty("instructions").EnumerateArray().Select(i => i.GetString())
+            .Should().Equal("AGENTS.md", "throne-session.append-system-prompt.txt");
+    }
+
+    [Fact(DisplayName = "Невалидный repo opencode.json перезаписывается, а не валит spawn")]
+    public async Task Unparsable_repo_config_is_replaced()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "opencode.json"), "not json [");
+        var sut = NewAdapter();
+
+        var act = () => sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Work, systemPrompt: null, skillPackages: [], CancellationToken.None);
 
-        args.Should().BeEmpty();
-        using var doc = JsonDocument.Parse(
-            await File.ReadAllTextAsync(Path.Combine(root, "opencode.json")));
-        var provider = doc.RootElement.GetProperty("provider").GetProperty("throne-local");
-        provider.GetProperty("options").GetProperty("baseURL").GetString().Should().BeEmpty();
-        provider.GetProperty("models").EnumerateObject().Should().BeEmpty();
+        await act.Should().NotThrowAsync();
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "opencode.json")));
+        doc.RootElement.GetProperty("$schema").GetString().Should().Be("https://opencode.ai/config.json");
     }
 
     [Fact(DisplayName = "OpenCode readiness объявляется через SessionReady, glyph-scrape отключён")]
     public void Opencode_readiness_uses_hook_event_not_glyph_scrape()
     {
-        var sut = NewAdapter("http://localhost", []);
+        var sut = NewAdapter();
 
         sut.ReadinessHookEvent.Should().Be(TerminalHookEvents.SessionReady);
         sut.IsTuiReady("───\n> Tell OpenCode what to do…\n───").Should().BeFalse();
     }
 
-    [Fact(DisplayName = "Непустой prompt: создаёт сессию на shared serve и строит attach --session argv")]
+    [Fact(DisplayName = "Непустой prompt: сессия на shared serve с provider/model-пином + model-дефолт в конфиге")]
     public async Task Non_empty_prompt_creates_session_and_builds_attach_args()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
         var client = new RecordingTuiClient();
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"], client);
+        var sut = NewAdapter(client);
 
-        var args = await sut.InitializeSessionAsync("intent-1", root, "qwen-3", "TASK", CancellationToken.None);
+        var args = await sut.InitializeSessionAsync("intent-1", root, "opencode/gpt-5.1-codex", "TASK", CancellationToken.None);
 
         args.Should().Equal("attach", "http://127.0.0.1:4096", "--dir", root, "--session", "ses_made");
         client.Calls.Should().Equal(
-            new TuiCall(new Uri("http://127.0.0.1:4096/"), root, "throne-local", "qwen-3", "TASK"));
+            new TuiCall(new Uri("http://127.0.0.1:4096/"), root, "opencode", "gpt-5.1-codex", "TASK"));
+
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "opencode.json")));
+        doc.RootElement.GetProperty("model").GetString().Should().Be("opencode/gpt-5.1-codex");
     }
 
-    [Fact(DisplayName = "Пустой prompt: attach без --session, сессия не создаётся (boot bare)")]
+    [Fact(DisplayName = "Пустой prompt: attach без --session, сессия не создаётся, но model-дефолт пишется")]
     public async Task Blank_prompt_attaches_without_session()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
         var client = new RecordingTuiClient();
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"], client);
+        var sut = NewAdapter(client);
 
-        var args = await sut.InitializeSessionAsync("intent-1", root, "qwen-3", "   ", CancellationToken.None);
+        var args = await sut.InitializeSessionAsync("intent-1", root, "opencode/gpt-5.1-codex", "   ", CancellationToken.None);
 
         args.Should().Equal("attach", "http://127.0.0.1:4096", "--dir", root);
         client.Calls.Should().BeEmpty();
+
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "opencode.json")));
+        doc.RootElement.GetProperty("model").GetString().Should().Be("opencode/gpt-5.1-codex");
+    }
+
+    [Fact(DisplayName = "Модель без provider/model-формата отвергается с понятной ошибкой")]
+    public async Task Model_without_provider_prefix_throws()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
+        var sut = NewAdapter();
+
+        var act = () => sut.InitializeSessionAsync("intent-1", root, "gpt-5.1-codex", "TASK", CancellationToken.None);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage("*provider/model*");
     }
 
     [Fact(DisplayName = "Plugin shim маппит OpenCode lifecycle events в существующий hook endpoint")]
     public async Task Plugin_shim_maps_lifecycle_events_to_hook_endpoint()
     {
         var root = Path.Combine(Path.GetTempPath(), $"throne-opencode-{Guid.NewGuid():N}");
-        var sut = NewAdapter("http://localhost:1234", ["llama-4"]);
+        var sut = NewAdapter();
 
         await sut.PrepareSpawnArgsAsync(
             "intent-1", root, TerminalRunModes.Interview, systemPrompt: null, skillPackages: [], CancellationToken.None);
@@ -166,12 +195,8 @@ public class OpencodeSessionHookAdapterTests
                 ("tool.execute.after", TerminalHookEvents.PostToolUse, TerminalHookEvents.OpenCodeBindingTypedHook));
     }
 
-    private static OpencodeSessionHookAdapter NewAdapter(
-        string? baseUrl,
-        IReadOnlyList<string> models,
-        IOpencodeTuiClient? client = null) =>
+    private static OpencodeSessionHookAdapter NewAdapter(IOpencodeTuiClient? client = null) =>
         new(
-            BuildDiscovery(baseUrl, models),
             HookOptions,
             new SessionSkillMaterializer(),
             new FixedServeGateway(),

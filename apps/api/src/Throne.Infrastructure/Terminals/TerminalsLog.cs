@@ -116,4 +116,8 @@ internal static partial class TerminalsLog
         bool success,
         int exitCode,
         string detail);
+
+    [LoggerMessage(EventId = 21, Level = LogLevel.Warning,
+        Message = "OpenCode live model list unavailable (surfaced as empty): {Reason}")]
+    public static partial void OpencodeModelListUnavailable(ILogger logger, string reason);
 }

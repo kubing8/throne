@@ -48,6 +48,39 @@ internal sealed class EfTerminalSettingsStore(
         await ctx.SaveChangesAsync(ct);
     }
 
+    public Task<(string? Vendor, string? Model)> GetLastLaunchAsync(CancellationToken ct) =>
+        ReadAsync(async (ctx, c) =>
+        {
+            var row = await ctx.Set<TerminalSettingsRow>().AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == TerminalSettingsRow.SingletonId, c);
+            return (row?.LastVendor, row?.LastModel);
+        }, ct);
+
+    public async Task SetLastLaunchAsync(string vendor, string model, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vendor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(model);
+        var ctx = RequireWriteContext(nameof(SetLastLaunchAsync));
+        var existing = await ctx.Set<TerminalSettingsRow>()
+            .FirstOrDefaultAsync(r => r.Id == TerminalSettingsRow.SingletonId, ct);
+        if (existing is null)
+        {
+            ctx.Set<TerminalSettingsRow>().Add(new TerminalSettingsRow
+            {
+                Id = TerminalSettingsRow.SingletonId,
+                DefaultVendor = TerminalAgentCatalog.DefaultVendor,
+                LastVendor = vendor,
+                LastModel = model
+            });
+        }
+        else
+        {
+            existing.LastVendor = vendor;
+            existing.LastModel = model;
+        }
+        await ctx.SaveChangesAsync(ct);
+    }
+
     private ThroneDbContext RequireWriteContext(string method) =>
         Sessions.Current
             ?? throw new InvalidOperationException(

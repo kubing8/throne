@@ -54,6 +54,13 @@ const VENDORS = [
     install: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
     login: "codex login",
     doc: "https://developers.openai.com/codex/cli"
+  },
+  {
+    key: "opencode",
+    label: "OpenCode",
+    install: "curl -fsSL https://opencode.ai/install | bash",
+    login: "opencode auth login",
+    doc: "https://opencode.ai/docs/"
   }
 ] as const;
 
@@ -105,7 +112,7 @@ function buildVendorItem(
     };
   }
 
-  // Паритет: оба агента — вкладками, чтобы новичок видел выбор. Команда зависит
+  // Паритет: все агенты — вкладками, чтобы новичок видел выбор. Команда зависит
   // от состояния: «установлен, но не залогинен» (login_status уже различает,
   // CliLoginProbe) → login, иначе → install.
   const anyLoggedOut = vendors.some((v) => v.login_status === "logged_out");

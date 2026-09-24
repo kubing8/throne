@@ -24,4 +24,17 @@ public sealed class TerminalSettingsService(
         await unitOfWork.ExecuteAsync(inner => store.SetDefaultVendorAsync(vendor, inner), ct);
         return vendor;
     }
+
+    public Task<(string? Vendor, string? Model)> GetLastLaunchAsync(CancellationToken ct) =>
+        store.GetLastLaunchAsync(ct);
+
+    public async Task SetLastLaunchAsync(string vendor, string model, CancellationToken ct)
+    {
+        if (!vendors.IsKnownVendor(vendor))
+        {
+            throw TerminalFailures.VendorInvalid(vendors, vendor);
+        }
+
+        await unitOfWork.ExecuteAsync(inner => store.SetLastLaunchAsync(vendor, model, inner), ct);
+    }
 }

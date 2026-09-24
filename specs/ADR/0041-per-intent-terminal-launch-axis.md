@@ -83,7 +83,8 @@ The lock-while-live behaviour is unchanged: parameters change only through a new
 
 ### Deferred
 
-- A global per-user last-used (the choice is per-intent).
+- A per-user preference (Throne remains a single-operator instance; the current global preference
+  is instance-level).
 - Editing a live session's parameters without a restart (lock-while-live retained).
 
 ## Amendment — ADR-0047 SQLite persistence (2026-06-26)
@@ -92,3 +93,11 @@ The lock-while-live behaviour is unchanged: parameters change only through a new
 `terminal_launches`: launches are stored in the EF Core `terminal_launches` table.
 Open extension payloads (`vendor_model`, `allowed_tools`) remain JSON columns using the
 shared EF JSON policy.
+
+## Amendment — Global last-launch preference (2026-09-24)
+
+The per-intent record remains the first prefill source. In addition, the terminal settings
+singleton stores the vendor and model from the most recent successful launch. A new intent uses
+that global preference when it has no per-intent launch record and the model is still present in
+the live vendor catalog. This is instance-level single-operator preference, not an owner axis or
+session state; live sessions and their per-intent records are unchanged.

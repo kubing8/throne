@@ -105,8 +105,9 @@ public class SkillManifestParserTests
         manifest.SystemInstructions.Should().HaveCount(4);
         manifest.Bundles.Should().HaveCount(4);
         manifest.Bundles.Select(b => b.Mode).Should().BeEquivalentTo(ExpectedBundleModes);
-        manifest.DreamSources.Should().HaveCount(3);
-        manifest.DreamSources.Select(s => s.Vendor).Should().BeEquivalentTo("claude-code", "claude-desktop", "codex-cli");
+        manifest.DreamSources.Should().HaveCount(4);
+        manifest.DreamSources.Select(s => s.Vendor)
+            .Should().BeEquivalentTo("claude-code", "claude-desktop", "codex-cli", "opencode");
     }
 
     private static string ResolveManifestPath()

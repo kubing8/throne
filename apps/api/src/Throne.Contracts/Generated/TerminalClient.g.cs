@@ -27,7 +27,7 @@ namespace Throne.Terminal.Contracts.Generated
     
 
     /// <summary>
-    /// Provenance of a vendor's curated model list. `static` — the list is hardcoded in the backend descriptor and changes only by editing the catalog (`claude`, `codex`). `local` — the list comes from the operator's local OpenAI-compatible endpoint (`Throne:LocalModel:BaseUrl`, probed via `GET {BaseUrl}/v1/models`); used by `opencode`. `models` may be empty when the endpoint is unconfigured/unreachable.
+    /// Provenance of a vendor's curated model list. `static` — the list is hardcoded in the backend descriptor and changes only by editing the catalog (`claude`, `codex`). `local` — the list would come from the operator's local OpenAI-compatible endpoint (`Throne:LocalModel:BaseUrl`, probed via `GET {BaseUrl}/v1/models`); no current vendor uses it — the channel stays a settings-only probe. `agent` — the list is discovered live from the agent CLI itself and mirrors the models the operator enabled/authenticated in the agent's own settings (used by `opencode`: providers connected in the CLI, flattened to `provider/model` ids via the shared `opencode serve`). `models` may be empty for dynamic sources when the underlying channel is unavailable.
     /// <br/>
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -41,6 +41,10 @@ namespace Throne.Terminal.Contracts.Generated
         [System.Text.Json.Serialization.JsonStringEnumMemberName(@"local")]
         [System.Runtime.Serialization.EnumMember(Value = @"local")]
         Local = 1,
+
+        [System.Text.Json.Serialization.JsonStringEnumMemberName(@"agent")]
+        [System.Runtime.Serialization.EnumMember(Value = @"agent")]
+        Agent = 2,
 
     }
 
@@ -69,7 +73,7 @@ namespace Throne.Terminal.Contracts.Generated
         public bool Supports_effort { get; set; }
 
         /// <summary>
-        /// Model whitelist, native-default-first. Always at least one entry for `model_source=static`; may be empty for `model_source=local` when the local endpoint is unconfigured or unreachable — the launch surface then disables the model picker for that vendor.
+        /// Model whitelist, native-default-first. Always at least one entry for `model_source=static`; may be empty for dynamic sources (`local`, `agent`) when the underlying channel is unavailable — the launch surface then disables the model picker for that vendor.
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("models")]
@@ -77,7 +81,7 @@ namespace Throne.Terminal.Contracts.Generated
         public System.Collections.Generic.ICollection<string> Models { get; set; } = new System.Collections.ObjectModel.Collection<string>();
 
         /// <summary>
-        /// Native default model = first entry of `models`. Null when `models` is empty (only possible for `model_source=local`).
+        /// Native default model = first entry of `models`. Null when `models` is empty (only possible for dynamic model sources).
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("default_model")]
@@ -106,7 +110,7 @@ namespace Throne.Terminal.Contracts.Generated
         public TerminalModelSource Model_source { get; set; }
 
         /// <summary>
-        /// Result of the per-vendor login probe (CLI present + authenticated). Feeds the vendor card in `/settings` and the «Throne готов» readiness check (≥1 vendor with `ready`). `in_development` is a static placeholder (currently `opencode`) — the vendor is shown but not launchable; see `selectable`.
+        /// Result of the per-vendor login probe (CLI present + authenticated). Feeds the vendor card in `/settings` and the «Throne готов» readiness check (≥1 vendor with `ready`). `in_development` is a static placeholder for vendors intentionally not wired for launch (no current vendor) — the vendor is shown but not launchable; see `selectable`.
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("login_status")]
@@ -115,7 +119,7 @@ namespace Throne.Terminal.Contracts.Generated
         public TerminalVendorLoginStatus Login_status { get; set; }
 
         /// <summary>
-        /// Short diagnostic from the login probe (`claude 2.x`, `codex: not logged in`, `в разработке`). Surfaced as the vendor-card subtitle; null when the probe has nothing to add.
+        /// Short diagnostic from the login probe (`claude 2.x`, `codex: not logged in`, `opencode auth login`). Surfaced as the vendor-card subtitle; null when the probe has nothing to add.
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("login_detail")]
@@ -141,7 +145,7 @@ namespace Throne.Terminal.Contracts.Generated
     }
 
     /// <summary>
-    /// Login readiness of a terminal vendor's CLI. `ready` — CLI on PATH and authenticated (`claude auth status` / `codex login status` exit 0). `logged_out` — CLI present but not authenticated. `missing` — CLI not found on PATH. `in_development` — vendor is intentionally not wired for launch yet (e.g. `opencode` pending local-model rework); it is excluded from the readiness check and not `selectable`.
+    /// Login readiness of a terminal vendor's CLI. `ready` — CLI on PATH and authenticated (`claude auth status` / `codex login status` / `opencode auth list` exit 0). `logged_out` — CLI present but not authenticated. `missing` — CLI not found on PATH. `in_development` — vendor is intentionally not wired for launch yet; it is excluded from the readiness check and not `selectable` (reserved; no current vendor).
     /// <br/>
     /// </summary>
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -386,7 +390,7 @@ namespace Throne.Terminal.Contracts.Generated
         public string Vendor { get; set; }
 
         /// <summary>
-        /// Model id from the vendor's whitelist (claude: opus | sonnet | haiku; codex: gpt-5.6-sol | gpt-5.6-terra | gpt-5.6-luna | gpt-5.5; opencode: any id advertised by the local `/v1/models` endpoint). Omitted → the vendor's native default. An id outside the whitelist for the chosen vendor → 400.
+        /// Model id from the vendor's whitelist (claude: opus | sonnet | haiku; codex: gpt-5.6-sol | gpt-5.6-terra | gpt-5.6-luna | gpt-5.5; opencode: any `provider/model` id the operator's own opencode offers). Omitted → the vendor's native default. An id outside the whitelist for the chosen vendor → 400.
         /// <br/>
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("model")]

@@ -69,24 +69,25 @@ public class TerminalLaunchResolverTests
             TerminalAgentCatalog.VendorCodex, "gpt-5.6-terra", TerminalAgentCatalog.EffortXhigh));
     }
 
-    [Fact(DisplayName = "Opencode: model resolved from live /v1/models, effort null")]
+    [Fact(DisplayName = "Opencode: model resolved from live agent catalog, effort null")]
     public async Task Opencode_resolves_model_from_dynamic_catalog_without_effort()
     {
-        var catalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["llama-4", "qwen-3"]);
+        var catalog = new StubCatalog(
+            TerminalAgentCatalog.VendorOpencode, ["opencode/gpt-5.1-codex", "anthropic/claude-sonnet-4-5"]);
         var resolver = Build(dynamicCatalogs: [catalog]);
 
         var options = await resolver.ResolveAsync(
-            TerminalAgentCatalog.VendorOpencode, model: "qwen-3", effort: null, CancellationToken.None);
+            TerminalAgentCatalog.VendorOpencode, model: "anthropic/claude-sonnet-4-5", effort: null, CancellationToken.None);
 
         options.Vendor.Should().Be(TerminalAgentCatalog.VendorOpencode);
-        options.Model.Should().Be("qwen-3");
+        options.Model.Should().Be("anthropic/claude-sonnet-4-5");
         options.Effort.Should().BeNull();
     }
 
     [Fact(DisplayName = "Opencode: unknown model → terminal.args_invalid")]
     public async Task Opencode_rejects_model_outside_dynamic_catalog()
     {
-        var catalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["llama-4"]);
+        var catalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["opencode/gpt-5.1-codex"]);
         var resolver = Build(dynamicCatalogs: [catalog]);
 
         var act = () => resolver.ResolveAsync(
@@ -99,11 +100,11 @@ public class TerminalLaunchResolverTests
     [Fact(DisplayName = "Opencode: caller-supplied effort silently dropped (descriptor unsupported)")]
     public async Task Opencode_drops_caller_effort()
     {
-        var catalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["llama-4"]);
+        var catalog = new StubCatalog(TerminalAgentCatalog.VendorOpencode, ["opencode/gpt-5.1-codex"]);
         var resolver = Build(dynamicCatalogs: [catalog]);
 
         var options = await resolver.ResolveAsync(
-            TerminalAgentCatalog.VendorOpencode, model: "llama-4",
+            TerminalAgentCatalog.VendorOpencode, model: "opencode/gpt-5.1-codex",
             effort: TerminalAgentCatalog.EffortHigh, CancellationToken.None);
 
         options.Effort.Should().BeNull();
