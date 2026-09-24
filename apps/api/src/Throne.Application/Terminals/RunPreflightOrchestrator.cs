@@ -79,6 +79,7 @@ public sealed class RunPreflightOrchestrator(
             intent.TagIds,
             ct);
         await launches.SaveAsync(intent.Id.Value, launchPlan, ct);
+        await launches.SaveLastLaunchAsync(launchPlan, ct);
         await skills.SaveAsync(intent.Id.Value, mode, skillPlan, ct);
         return RunPreflightSession.BuildResult(
             intent.Id.Value, sessionName, TerminalSessionStates.Running, waitResult.Bindings, blockingBindings: [],

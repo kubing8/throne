@@ -14,5 +14,7 @@ internal sealed class TerminalSettingsRowConfiguration : IEntityTypeConfiguratio
 
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.DefaultVendor).HasColumnName("default_vendor").IsRequired();
+        builder.Property(x => x.LastVendor).HasColumnName("last_vendor");
+        builder.Property(x => x.LastModel).HasColumnName("last_model");
     }
 }

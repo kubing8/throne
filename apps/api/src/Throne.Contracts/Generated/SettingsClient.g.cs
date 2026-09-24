@@ -36,6 +36,12 @@ namespace Throne.Settings.Contracts.Generated
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^[a-z0-9][a-z0-9-]*$")]
         public string Default_vendor { get; set; }
 
+        [System.Text.Json.Serialization.JsonPropertyName("last_vendor")]
+        public string Last_vendor { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("last_model")]
+        public string Last_model { get; set; }
+
         private System.Collections.Generic.IDictionary<string, object> _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]

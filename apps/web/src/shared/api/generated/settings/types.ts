@@ -52,13 +52,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read the default agent vendor for new terminal sessions.
-         * @description Returns the operator-chosen `default_terminal_vendor` used to pre-fill the embedded-terminal launch controls and as the server-side fallback when a `run`/`restart` request omits `vendor`. Model and effort defaults are native to the vendor and are NOT persisted here — only the vendor is a setting.
+         * Read terminal launch defaults for new sessions.
+         * @description Returns the operator-chosen `default_terminal_vendor` used as the server-side fallback when a `run`/`restart` request omits `vendor`, plus the last successful vendor/model selection.
          */
         get: operations["getTerminalSettings"];
         /**
          * Set the default agent vendor for new terminal sessions.
-         * @description Persists `default_terminal_vendor` (claude | codex | opencode). Idempotent upsert of the settings singleton; takes effect on the next launch (live sessions are not touched).
+         * @description Persists `default_terminal_vendor` (claude | codex | opencode). Last successful launch preferences are updated by the run endpoint.
          */
         put: operations["setTerminalSettings"];
         post?: never;
@@ -248,6 +248,8 @@ export interface components {
         TerminalAgentVendor: string;
         TerminalSettingsDto: {
             default_vendor: components["schemas"]["TerminalAgentVendor"];
+            last_vendor?: components["schemas"]["TerminalAgentVendor"] | null;
+            last_model?: string | null;
         };
         UpdateTerminalSettingsRequest: {
             default_vendor: components["schemas"]["TerminalAgentVendor"];

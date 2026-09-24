@@ -84,17 +84,30 @@ export function useLaunchAxis({
     if (initialized.current || catalog === undefined) return;
     if (!settingsQuery.isFetched || !ready) return;
 
-    // Persisted intent launch wins over the global default_vendor; the vendor must still exist
-    // in the catalog AND be selectable (non-selectable vendors are shown in settings but never
-    // offered for launch), otherwise fall back to the default.
+    // Per-intent launch wins over the global last-launch preference; both must still exist in the
+    // catalog and be selectable, otherwise fall back to the configured vendor/default.
     const persistedMeta =
       sessionLaunch !== null
         ? findVendorMetadata(catalog, sessionLaunch.vendor)
         : undefined;
     const persistedVendor =
       persistedMeta?.selectable === true ? sessionLaunch?.vendor : undefined;
+    const globalVendor = settingsQuery.data?.last_vendor;
+    const globalModel = settingsQuery.data?.last_model;
+    const globalMeta =
+      globalVendor === undefined || globalVendor === null
+        ? undefined
+        : findVendorMetadata(catalog, globalVendor);
+    const globalPreference =
+      globalMeta?.selectable === true &&
+      globalModel !== undefined &&
+      globalModel !== null &&
+      globalMeta.models.includes(globalModel)
+        ? { vendor: globalVendor, model: globalModel }
+        : undefined;
     const resolved =
       persistedVendor ??
+      globalPreference?.vendor ??
       resolveDefaultVendor(catalog, settingsQuery.data?.default_vendor);
     if (resolved === undefined) return;
     const meta = findVendorMetadata(catalog, resolved);
@@ -105,6 +118,9 @@ export function useLaunchAxis({
     if (persistedVendor !== undefined && sessionLaunch !== null) {
       setModelState(sessionLaunch.model);
       setEffortState(sessionLaunch.effort ?? meta.default_effort ?? null);
+    } else if (globalPreference?.vendor === resolved) {
+      setModelState(globalPreference.model);
+      setEffortState(meta.default_effort ?? null);
     } else {
       setModelState(meta.default_model ?? null);
       setEffortState(meta.default_effort ?? null);
@@ -114,7 +130,9 @@ export function useLaunchAxis({
     ready,
     sessionLaunch,
     settingsQuery.isFetched,
-    settingsQuery.data?.default_vendor
+    settingsQuery.data?.default_vendor,
+    settingsQuery.data?.last_vendor,
+    settingsQuery.data?.last_model
   ]);
 
   const selectedMeta = useMemo(

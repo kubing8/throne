@@ -4,7 +4,8 @@ namespace Throne.Application.Terminals;
 
 public sealed class RunPreflightLaunchPlanner(
     TerminalLaunchResolver resolver,
-    IIntentTerminalLaunchStore store)
+    IIntentTerminalLaunchStore store,
+    TerminalSettingsService terminalSettings)
 {
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> EmptySelections =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -42,6 +43,9 @@ public sealed class RunPreflightLaunchPlanner(
 
     public Task SaveAsync(string intentId, RunPreflightLaunchPlan plan, CancellationToken ct) =>
         store.SaveAsync(intentId, plan.Record, ct);
+
+    public Task SaveLastLaunchAsync(RunPreflightLaunchPlan plan, CancellationToken ct) =>
+        terminalSettings.SetLastLaunchAsync(plan.Options.Vendor, plan.Options.Model, ct);
 }
 
 public sealed record RunPreflightLaunchPlan(

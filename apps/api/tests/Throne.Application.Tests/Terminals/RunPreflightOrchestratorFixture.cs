@@ -66,16 +66,22 @@ public partial class RunPreflightOrchestratorTests
             var cloneWait = new RunPreflightCloneWait(Bindings, runPreflightOptions, clock);
             var spawn = BuildSpawn(workspace, clock, uow, runPreflightOptions);
             var guards = new RunPreflightGuards(Intents, Detection, spawn);
-            var launchResolver = BuildLaunchResolver();
+            var settingsStore = Substitute.For<ITerminalSettingsStore>();
+            settingsStore.GetDefaultVendorAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(TerminalAgentCatalog.VendorClaude));
+            var vendorCatalog = TerminalSpawnTestDoubles.VendorCatalog();
+            var launchResolver = new TerminalLaunchResolver(
+                settingsStore, vendorCatalog, Array.Empty<IVendorModelCatalog>());
             var promptGate = BuildPromptGate(clock, uow);
             LaunchStore = Substitute.For<IIntentTerminalLaunchStore>();
+            var terminalSettings = new TerminalSettingsService(settingsStore, vendorCatalog, uow);
+            var launchPlanner = new RunPreflightLaunchPlanner(launchResolver, LaunchStore, terminalSettings);
             var skillPlanner = new RunPreflightSkillPlanner(
                 BuildSkillSelection(),
                 new SessionSkillPackageRegistry(TerminalSpawnTestDoubles.SkillCatalog()),
                 LaunchStore);
-            var launchPlanner = new RunPreflightLaunchPlanner(launchResolver, LaunchStore);
-            Orchestrator = new RunPreflightOrchestrator(
-                guards, autoBind, queue, cloneWait, spawn, promptGate, skillPlanner, launchPlanner);
+             Orchestrator = new RunPreflightOrchestrator(
+                 guards, autoBind, queue, cloneWait, spawn, promptGate, skillPlanner, launchPlanner);
         }
 
         private (RepositoryBindingService Service, IRepositoryCloneRequests CloneQueue) BuildBindingService(
@@ -139,15 +145,6 @@ public partial class RunPreflightOrchestratorTests
             defaults.ListAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(SkillModeDefaultSeeds.Build(catalog)));
             return new SessionSkillSelectionService(catalog, defaults);
-        }
-
-        private static TerminalLaunchResolver BuildLaunchResolver()
-        {
-            var settingsStore = Substitute.For<ITerminalSettingsStore>();
-            settingsStore.GetDefaultVendorAsync(Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(TerminalAgentCatalog.VendorClaude));
-            return new TerminalLaunchResolver(
-                settingsStore, TerminalSpawnTestDoubles.VendorCatalog(), Array.Empty<IVendorModelCatalog>());
         }
 
         private RunPreflightPromptGate BuildPromptGate(TimeProvider clock, IUnitOfWork uow)
